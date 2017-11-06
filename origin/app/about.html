@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+
+    <title>AuctionHouse Dapp</title>
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+
+        <!-- Bootstrap -->
+    <link href="bootstrap.min.css" rel="stylesheet">
+    <link href="bootstrap-theme.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <link href="app.css" rel='stylesheet' type='text/css'>
+    <script src="auctionhouse.js"></script>
+    <script src="network.js"></script>
+    <script src="app.js"></script>
+    <script src="about.js"></script>
+  </head>
+  <body>
+
+        <!-- Fixed navbar -->
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html">AuctionHouse</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="index.html">Home</a></li>
+            <li><a href="index.html#auctionSection">Auctions</a></li>
+            <li><a href="createAuction.html">New Auction</a></li>
+            <li><a href="about.html">About</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+
+    <div class="container theme-showcase" role="main">
+
+      <!-- Going to set up an 8-4 column grid -->
+      <div class="row">
+	<div class="col-md-8">
+	
+	  <!-- Main jumbotron for a primary marketing message or call to action -->
+	  <div id="header"></div>
+
+	  <h1>About AuctionHouse</h1>
+	  <p>
+            AuctionHouse is a decentralized app built on Ethereum to
+            facilitate the auction of on-chain goods. Here are some
+            frequently asked questions about AuctionHouse.
+	  </p>
+
+          <div class="faq">
+            <div class="faqquestion">
+              <p>
+                What can I auction on AuctionHouse?
+              </p>
+            </div>
+            <div class="faqanswer">
+              <p>
+                Any on-chain asset that conforms to
+                the <a href="https://github.com/dob/auctionhouse/blob/master/contracts/Asset.sol">Asset
+                contract interface</a> can be auctioned. Some examples
+                of things that could be auctioned are virtual goods,
+                domain names, tokens that represent a role in an on
+                chain economy, or tokens that represent real world
+                assets like tickets.
+              </p>
+            </div>
+          </div>
+
+          
+          <div class="faq">
+            <div class="faqquestion">
+              <p>
+                Is AuctionHouse production ready and running on the
+                Ethereum mainnet?
+              </p>
+            </div>
+            <div class="faqanswer">
+              <p>
+                No. AuctionHouse is in alpha and is running on the
+                Ethereum Ropsten Testnet. We will deploy it on the
+                mainnet after a round of testing and security scrutiny
+                from the community. There are also a number of
+                semantic points that we'd like feedback on including
+                how to best standardize representation of on chain non
+                fungible assets in a secure way, so there may be
+                changes before deploying to the mainnet.
+              </p>
+            </div>
+          </div>
+
+          
+          <div class="faq">
+            <div class="faqquestion">
+              <p>
+                I keep seeing errors about not having a connection to
+                the network. What's this about?
+              </p>
+            </div>
+            <div class="faqanswer">
+              <p>
+                As a decentralized app running on Ethereum, every user
+                will need to be able to connect to an Ethereum node in
+                order to interact with AuctionHouse. The easiest way
+                to do this is to
+                install <a href="http://metamask.io">MetaMask</a>
+                which is a browser extension that will connect you to
+                Ethereum. You can also run your own Ethereum node
+                locally. Remember that the contract is not live on the
+                Mainnet yet, so point your Metamask or Node to the
+                Ropsten Testnet to try out AuctionHouse.
+              </p>
+            </div>
+          </div>
+
+          
+          <div class="faq">
+            <div class="faqquestion">
+              <p>
+                When my auction ends, or when I get outbid, why do I
+                have to "withdraw" my funds?
+              </p>
+            </div>
+            <div class="faqanswer">
+              <p>
+                For security purposes, it is recommend that Dapps use
+                the withdraw pattern to let people remove their funds
+                from contracts. This prevents a class of attacks where
+                you should receive funds, but the attacker prevents it
+                via stack limits. Instead, we will always show you
+                your withdraw balance, and let you hit the withdraw
+                button to receive these funds as long as your balance
+                is greater than zero.
+              </p>
+            </div>
+          </div>
+
+          
+          <div class="faq">
+            <div class="faqquestion">
+              <p>
+                When I go to create an auction, why do I have to
+                register a name?
+              </p>
+            </div>
+            <div class="faqanswer">
+              <p>
+                Since AuctionHouse is in alpha, and there aren't a lot
+                of auctionable non-fungible goods on the blockchain
+                yet, we wanted to make it easy for people to own an
+                asset that they can auction. For demo purposes we
+                created a simple contract called SampleName, and the
+                "register a name" section on the create auction page
+                is just an interface to register a fake domain name,
+                so that you can create an auction with it. This step
+                is optional, and if you were to deploy a contract that
+                conformed to the Asset interface, then you could
+                auction off a record from that contract.
+              </p>
+            </div>
+          </div>
+
+          
+          <div class="faq">
+            <div class="faqquestion">
+              <p>
+                Who created AuctionHouse?
+              </p>
+            </div>
+            <div class="faqanswer">
+              <p>
+                AuctionHouse was built
+                by <a href="http://twitter.com/petkanics">Doug
+                Petkanics</a>
+                and <a href="http://twitter.com/ericxtang">Eric
+                Tang</a>. We built it in order to get experience
+                building an end-to-end Dapp complete with protocol
+                layer, UI, and decentralized deployment. It's a work
+                in progress, and we'd love to hear any feedback or bug
+                reports through twitter or email, or
+                on <a href="https://github.com/dob/auctionhouse/issues">github
+                issues</a>.
+              </p>
+            </div>
+          </div>
+
+          
+	</div> <!-- The column of 8 -->
+
+
+	<div class="col-md-4"> <!-- The right column of 4 -->
+	  <div id="right-column"></div>
+        </div>
+	
+      </div> <!-- original row -->
+    </div><!-- container -->
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="bootstrap.min.js"></script>
+  </body>
+</html>
+
