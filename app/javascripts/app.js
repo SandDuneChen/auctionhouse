@@ -69,17 +69,17 @@ window.onload = function() {
 
         web3.eth.getAccounts(function(err, accs) {
             if (err != null) {
-		alert("There was an error fetching your accounts.");
-		return;
+                alert("There was an error fetching your accounts.");
+                return;
             }
-	    accounts = accs;
-	    account = accounts[0];
+            accounts = accs;
+            account = accounts[0];
 
-	    updateEthNetworkInfo();
-	    updateAuctions();
-        updateBlockNumber();
+            updateEthNetworkInfo();
+            updateAuctions();
+            updateBlockNumber();
 
-	});
+	    });
     });
 }
 

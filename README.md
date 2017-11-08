@@ -1,124 +1,212 @@
-# Auctionhouse project
+#  AuctionHouse源码阅读
 
-This is a platform for auctioning non fungible on chain goods. The below are work in progress notes that we can update and point to as we develop the project.
+AuctionHouse一个可在链上拍卖“Non fungible”物品的平台。
+“Fungible”意思是易腐的或消费品，如在商品中（水果，谷物，液体，办公用品），这些商品将被使用，然后被替换。 “Non fungible”是相反的，不易腐烂的，不可消费的。
 
-## Running the Dapp locally
-
-You can run the app locally using truffle. 
-
-    git clone https://github.com/dob/auctionhouse.git
-    cd auctionhouse
-    npm install -g truffle     // if not already installed
-    npm install truffle-default-builder --save
-    truffle serve
-
-You'll need to either be running a local ethereum node, or be using an Ethereum browser like Mist or Metamask. Point your Ethereum browser at the Ropsten TestNet.
-
-Access your locally running app at `http://localhost:8080`
-
-## Protocol
-
-Implement an on chain set of smart contracts to govern auctions for non-fungible on chain goods. If someone wants to auction off a specific token which either doesn’t have liquidity on an exchange, or is unique, or is representative of some power or job in a network, then they can do so via the auctionhouse platform. The platform will allow the seller to:
-
-- Create an auction
-- Declare the asset for sale (to be held in escrow via the auctionhouse contract)
-- Set a duration for the auction
-- Set an initial price
-- Set a reserve price
-- Cancel the auction (in the first X minutes or if the reserve has not been met)
-
-It will allow bidding from other users
-
-- Place a bid for a certain amount
-
-It will facilitate the transfer of the asset
-
-- Before the auction is activated the token gets placed in escrow. Ownership gets transfered to the contract itself.
-- When auction ends if the reserve price is hit, it will allow the transfer of the token to the appropriate person - top bidder if reserve is hit, or back to the owner if the reserve is not hit.
-- If auction is cancelled then the asset transfers back to the owner
-
-It will provide for a distribution incentive
-
-- Set a percentage cut for the distribution platform (optional, or can be 0 percent). This is created by the seller upon creation of the auction. It acts as an incentive for a specific platform to promote and feature this auction. Since many auctions will be created by using a platform, that platform will likely be creating the auction on behalf of the user and therefore they’ll set this percentage cut for themselves each time (at say 5%).
-- Set a percentage cut to be paid to the platform that generates the winning bid (optional, or can be 0%). This is an alternative to the seller setting the reward cut platform, and instead the reward cut will go to the platform that submits the winning bid. Perhaps both of these should exist in the protocol and we need to think about how they would be gamed.
-
-## Use Cases
-
-This is meant to facilitate auctioning off any non-fungible *on-chain* asset. Anything represented by an interfaced non-fungible asset (not ERC20, but need to find equivalent...ERC-137 is for name registries and may be close?) token can be auctioned.
-
-- Auction a name on the Ethereum Name Service
-- Auction off an on-chain virtual good (a digital baseball card or a token that represents ownership over a powerful sword in a blockchain backed RPG)
-- Auction off a real world good that’s represented by a token on the blockchain (a concert ticket, or a futures contract)
-- Auction off a block of on chain assets that would be difficult to sell all at once on an exchange (10% of all REP tokens).
-- Auction off a token that entitles one to a role in an on-chain economy (a board membership token in a DAO, who has power to whitelist proposals)
-- Auction off ownership of an account in a service (user in a game is represented by a token...transfer the token)
-
-## Technical Standard For Auctionable Items
-
-As mentioned above, there needs to be some convention by which items are made available to be auctioned on this platform. Current thinking is to follow the inspiration of ERC20, which describes fungible tokens and provides methods to find out an owner's balance, the transfer the token, and to allow others to transfer the token on your behalf up to a certain amount.
-
-In the case of non-fungible assets, there is no concept of "balance", as each item is unique. Generally, a token is represented by an ID, and some associated metadata. An example (inspired from ERC137 which describes name records)...
-
-
-```javascript
-contract NonFungible {
-     struct Record {
-          address owner;
-          /* arbitrary metadata fields go here */
-     }
-
-     mapping(bytes32 => Record) records;    // Map an ID to the record
-
-     modifier onlyOwner(bytes32 recordId) {
-          if (records[recordId].owner != msg.sender) throw;
-          _
-     }
-
-     function owner(bytes32 recordId) constant returns address {
-          return records[recordId].owner;
-     }
-
-     function setOwner(bytes32 recordId, address newOwner) only_owner(recordId) {
-          records[recordId].owner = newOwner;
-     }
+## 1. 定义合约
+1.1 Asset合约
+这个合约定义了一个抽象合约，继承合约需要实现抽象合约里的两个方法，其中一个是查询方法owner，根据唯一的id返回资产的所有者；
+另一个方法是setOwner用于设置新的资产所有者，既然在链上拍卖物品，拍卖成功后资产自然易主，所以需要提供一个易主方法。
+```
+contract Asset {
+    function owner(string _recordId) returns (address ownerAddress);
+    function setOwner(string _recordId, address _newOwner) returns (bool success);    
 }
 ```
 
-In this example each record has an owner identified by an address. There is a function for changing the owner, that only the current owner can call. This would facilitate the auction contract to set the owner as the auction contract during the create auction call (which would be initially called by the current owner). It would allow the auction contract itself to set the owner back to the original owner in the case of a failed auction, and to the new owner in the case of a successful one.
+1.2 SampleName合约
+“Non fungible”商品的一个示例合约，提到“Non fungible”资产，每个都是独一无二的，没有“balance”这个概念。每个资产有一个唯一的ID及一些附加的元数据，这个示例合约的灵感来源于ERC137。
+这个合约继承自Asset这个抽象合约，需要实现owner和setOwner方法。合约中有一个Map类型的records，通过唯一的recordId指向一个Record（结构体）对象。通过addRecord方法可以增加记录，增加记录时需要传入一个唯一的recordId值及一些附加的记录数据，只有recordId对应的记录不存在时才创建新的Record对象，否则直接返回false。Record对象中有一个钱包地址，合约提供了更新及查询这个钱包地址的方法。另外，这个合约定义了一个modifier，限制只有资产所有者才能进行某些操作。
+在这个合约中提供了增加了记录的方法，可以通过传入一个唯一的名称（recordId）然后建立一个指向Record的对象，代表了这个资产相关的东西。
+```
+function addRecord(string _recordId, address _owner, string _name, address _walletAddress) returns (bool sufficient) {
+    if (records[_recordId].owner != 0) {
+        // If a record with this name already exists
+        return false;
+    }
 
-For now the contract works with `Assets` that implement the interface described in (Asset.sol)[blob/master/contracts/Asset.sol]. 
+    Record r = records[_recordId];
 
-## Dapp Frontend
+    r.owner = _owner;
+    r.name = _name;
+    r.walletAddress = _walletAddress;
 
-This protocol is truly decentralized, requiring no authoritative central party, so it can exist entirely on chain via transactions. This means that many different types of frontends are possible. Initially, we provide an example frontend that will connect to a locally running ethereum node by default, or any ethereum network via the Metamask plugin.
+    return true;
+}
+```
+1.3 AuctionHouse合约
+拍卖合约，我们这个合约分为几个部分：
+1） 变量定义
+- 一个Auction数组，Auction是一个结构体，由以下属性组成：
+```
+struct Auction {
+    // Location and ownership information of the item for sale
+    address seller; // 资产拍卖者
+    address contractAddress; // 资产的地址（资产合约的地址）
+    string recordId;         // 资产唯一的ID
+    // Auction metadata
+    string title; // 拍卖的title
+    string description;      // 拍卖的描述
+    uint blockNumberOfDeadline; // 拍卖的有效期，以block块计，即在新产生多少个blocks之后，这个拍卖结束
+    AuctionStatus status; // 拍卖的状态
+    // Distribution bonus
+    uint distributionCut;    // 手续费比例，按百分比算
+    address distributionAddress; // 手续费收款地址
+    // Pricing in wei
+    uint256 startingPrice;   // 起始价
+    uint256 reservePrice; // 保底价
+    uint256 currentBid; // 当前拍价
+    Bid[] bids; // 竞拍信息
+}
+```
+Auction结构体有一个Bid数组，保存这个拍卖的所有竞拍信息，Bid也是一个结构，包含以下属性：
+```
+struct Bid {
+    address bidder; // 竞拍者
+    uint256 amount; // 竞拍价
+    uint timestamp; // 竞拍的时间
+}
+```
+其它几个变量
+```
+// 用户发起拍卖的索引的集合，每个索引指向一个具体的拍卖
+mapping(address => uint[]) public auctionsRunByUser; // Pointer to auctions index for auctions run by this user
+// 用户发起竞拍的索引的集合，每个索引指向一个具体的拍卖
+mapping(address => uint[]) public auctionsBidOnByUser; // Pointer to auctions index for auctions this user has bid on
+// 某个资产是否处于拍卖状态的标识（资产合约地址+recordId唯一确认一个资产）
+// 防止同一资产发起多个拍卖
+mapping(string => bool) activeContractRecordConcat;
+// 用户退款累积
+mapping(address => uint) refunds;
+```
+2） events定义
+events可以用于与外界通信，客户端通过监听events事件可以执行合约的状态信息。
+```
+event AuctionCreated(uint id, string title, uint256 startingPrice, uint256 reservePrice);
+event AuctionActivated(uint id);
+event AuctionCancelled(uint id);
+event BidPlaced(uint auctionId, address bidder, uint256 amount);
+event AuctionEndedWithWinner(uint auctionId, address winningBidder, uint256 amount);
+event AuctionEndedWithoutWinner(uint auctionId, uint256 topBid, uint256 reservePrice);
+event LogFailure(string message);
+```
+3） modifier定义
+modifiers可以增加外界访问合约函数的限制。
+```
+modifier onlyOwner {
+    if (owner != msg.sender) throw;
+    _;
+}
 
-The app is deployed centrally on AWS pointing at the Ropsten Testnet at [http://auction-house.s3-website-us-east-1.amazonaws.com/index.html].
+modifier onlySeller(uint auctionId) {
+    if (auctions[auctionId].seller != msg.sender) throw;
+    _;
+}
 
-The app is also deployed on IPFS, but that isn't reliable for upgrades at the moment since the hash will need to constantly be updated. When we go live on the mainnet, we will provide an IPFS hash to reference the reference frontend.
+modifier onlyLive(uint auctionId) {
+    Auction a = auctions[auctionId];
+    if (a.status != AuctionStatus.Active) {
+        throw;
+    }
 
----
+    // Auction should not be over deadline
+    if (block.number >= a.blockNumberOfDeadline) {
+        throw;
+    }
+    _;
+}
+```
+4） constructor方法
+这个构造方法比较简单，只是记录合约创建者
+```
+// Constructor
+function AuctionHouse() {
+    owner = msg.sender;
+}
+```
+5） update方法定义
+- 发起（创建）一个拍卖(createAuction)： 传入拍卖资产信息（合约地址及唯一的recordId）及拍卖的信息（title等），创建一个新的拍卖，设置拍卖资产状态为true，新的拍卖的状态默认是Pening。
+- 激活拍卖(activateAuction)
+激活之后的拍卖才可以被竞拍，激活后拍卖状态变为Active，只有这个拍卖的所有者可以发起激活操作
+- 撤销拍卖(cancelAuction)
+拍卖在一定条件下可以被撤销，需要变更资产所有者，退还押金等，最后需要将拍卖设置为Inactive状态。
+- 竞拍(placeBid)
+拍卖在激活之后结束之前可以竞拍，每次的竞拍价要高于上一次竞拍价，且第一次的竞拍价要高于起拍价。如果此次竞拍有效，则需要将上一次的竞拍押金归还上一个竞拍用户。
+- 结束拍卖(endAuction)
+过了拍卖的deadline之后，就可以结束竞拍了，这时候所有人都可以结束这个拍卖（？？？？），逻辑上要区分是否有竞拍胜出者分别处理，如果有胜出者，拍卖资产易主（转给获胜者），买家和“拍卖行”（这里指的是手续费的收款地址）分钱；如果没有胜出者，拍卖资产归还卖家，押金退还，相关人员可以执行退款操作。
+- 退款(withdrawRefund)
+每次竞拍出价都需要缴纳等比例的押金（Ether），押金在合约账户了，如果本次竞拍成功，则需要退还上个竞拍者的押金，退还之后，可以在界面申请退款操作，押金（Ether）则从合约账户转到操作者账户上。
 
-### Questions
+7） query方法定义
+```
+- getAuction 根据auctionId返回Auction的相关信息
+- getAuctionCount 当前Auction的数量
+- getStatus 根据auctionId返回返回其对应的状态
+- getAuctionsCountForUser 某个用户的Auction数量
+- getAuctionIdForUserAndIdx 根据用户和该用户Auction的索引返回auctionId
+- getActiveContractRecordConcat 
+- getBidCountForAuction 根据auctionId返回Auction的竞拍数
+- getBidForAuctionByIdx 根据auctionId和bidIndex查询Bid信息
+- getRefundValue 查询某一用户该退款的数量
+```
+8） helper方法（内部方法使用）
+```
+- partyOwnsAsset 判断资产是否属于某个当事人
+- strConcat 拼接两个字符串
+- addrToString 地址转string
+```
+9） 特殊方法
 
-What is the best method for ensuring the underlying implementation of an Asset? It can implement the asset interface, but there's no guarantee that `setOwner()` actually transfers ownership. What does ownership even mean in the case of a one-off unique asset?
+这是一个[Fallback Function](http://solidity.readthedocs.io/en/develop/contracts.html#fallback-function)：
+```
+function() {
+    // Don't allow ether to be sent blindly to this contract
+    throw;
+}
+```
 
-What other incentives besides the distributionCut would you like to see? Incentives for escrow, fraud detection, per-bid referrals?
+## 2 前端交互
+2.1 metamask
 
-Any security holes in the contracts? Right now this is in alpha and only on the testnet. I'm sure we'll discover flaws in the implementation before going live on mainnet.
+2.2 创建Auction
 
+2.3 激活Auction
 
-###Local Test Procedure
-1. Create local chain: `geth --identity "ericnode" --rpc --rpcport "8081" --rpccorsdomain "*" --datadir ./chaindata --port "30303" --nodiscover --rpcapi "db,eth,net,web3" --networkid 1999 init ./CustomGenesis.json` (create chaindata dir, then create CustomGenesis.json - http://ethdocs.org/en/latest/network/test-networks.html)
-2. Launch console: `geth --identity "ericnode" --rpc --rpcport "8081" --rpccorsdomain "*" --datadir ./chaindata --port "30303" --nodiscover --rpcapi "db,eth,net,web3" --networkid 1999 console`
-3. Create new account: `personal.newAccount("password")`
-4. Mine some ether: miner.setEtherbase(personal.listAccounts[0]); miner.start()
-5. Make sure miner is running when deploying to testnet
-6. Deploy contracts by running: truffle migrate
-7. Unlock account0: `personal.unlockAccount(eth.accounts[0], "password")`
-8. Run simple test: `truffle test test/Simple.js`
+2.4 竞拍
 
------
+## 3 运行测试
+3.1 安装truffle（这里要注意一下版本）
+```
+npm install -g truffle@3.2.1
+```
+注： 如果是比较新的版本，运行truffle serve会报错
 
-Note from Doug...I changed the launch command a bit to support only metamask calls and not calls from all external services.
+3.2 安装builder
+```
+npm install truffle-default-builder --save
+```
+3.3 编译contract
+```
+truffle compile
+```
+3.4 部署compact
+```
+truffle migrate
+```
 
-`./geth --identity "ericnode" --rpc --rpcport "8545" --rpccorsdomain "chrome-extension://idknbmbdnapjicclomlijcgfpikmndhd" --datadir ~/.chaindata/ --port "30303" --rpcapi "db,eth,net,web3,personal" --networkid 1999 console`
+注1： 在部署之前，先启动testrpc
+
+注2： 部署之后会返回合约的部署地址，需要将这两个地址更新到network.js中
+
+3.5 启动程序
+```
+truffle server
+```
+3.6 在浏览器访问
+```
+http://localhost:8080
+```
+
+## 4 声明
+这个项目目前还处于开发阶段，很多功能不完善（很久没有提交了），请不要直接用于生产。
+但可以做为参考学习如何用Solidity编写和部署合约，以及如何使用web3在前端和合约交互。

@@ -2,3 +2,4 @@
 environments/*/contracts/*
 build/*
 node_modules/*
+.vscode/*

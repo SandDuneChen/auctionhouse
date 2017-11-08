@@ -51,7 +51,9 @@ module.exports = {
   },
   networks: {
     "development": {
-      network_id: "default"
+      host: "localhost",
+      port: 8545,
+      network_id: "*" // Match any network id
     },
     "morden": {
       network_id: 2,

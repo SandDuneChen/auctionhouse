@@ -27,27 +27,28 @@ function updateAuctions() {
 }
 
 function createAsset() {
-    var recordId = document.getElementById("nameToReserve").value;
+	var recordId = document.getElementById("nameToReserve").value;
 
-    setStatus("Initiating transaction... (please wait)", "warning");
-  showSpinner();
+	setStatus("Initiating transaction... (please wait)", "warning");
+	showSpinner();
 
-  sampleNameContract.addRecord(recordId, account, recordId, account, {from: account}).then(function(txnId) {
-      console.log("Transaction id is : " + txnId);
-      hideSpinner();
+	// 4个参数分别对应：string _recordId, address _owner, string _name, address _walletAddress
+	sampleNameContract.addRecord(recordId, account, recordId, account, {from: account}).then(function(promise) {
+		console.log("Transaction id is : " + promise['tx']);
+		hideSpinner();
 
-      sampleNameContract.owner.call(recordId).then(function(res) {
-	  if (res === account) {
-	      setStatus("You are the proud owner of the name: " + recordId);
-	  } else {
-	      setStatus("It looks like the owner of that name is: " + res, "error");
-	  }
-      });
-  }).catch(function(e) {
-    console.log(e);
-      setStatus("Error registering name. See log.", "error");
-    hideSpinner();
-  });
+		sampleNameContract.owner.call(recordId).then(function(res) {
+			if (res === account) {
+				setStatus("You are the proud owner of the name: " + recordId);
+			} else {
+				setStatus("It looks like the owner of that name is: " + res, "error");
+			}
+		});
+	}).catch(function(e) {
+		console.log(e);
+		setStatus("Error registering name. See log.", "error");
+		hideSpinner();
+	});
 };
 
 function createAuction() {
@@ -61,46 +62,49 @@ function createAuction() {
     var assetInstanceContract = Asset.at(contractAddress);
     
     assetInstanceContract.owner.call(recordId).then(function(res) {
-	if (!(res === account)) {
-	    setStatus("Looks like you don't own that asset", "error");
-	    hideSpinner();
-	    return;
-	}
-	var startingPrice = web3.toWei(parseFloat(document.getElementById("startingPrice").value), "ether");
-	var reservePrice = web3.toWei(parseFloat(document.getElementById("reservePrice").value), "ether");
-	var deadline = currentBlockNumber + parseInt(document.getElementById("deadline").value);
-	console.log("Setting deadline to " + deadline + " and current block num is " + currentBlockNumber);
-	console.log("Prices, starting/reserve " + startingPrice + "/" + reservePrice);
-	console.log("Marketer is: " + marketer);
+		if (!(res === account)) {
+			setStatus("Looks like you don't own that asset", "error");
+			hideSpinner();
+			return;
+		}
+		var startingPrice = web3.toWei(parseFloat(document.getElementById("startingPrice").value), "ether");
+		var reservePrice = web3.toWei(parseFloat(document.getElementById("reservePrice").value), "ether");
+		var deadline = currentBlockNumber + parseInt(document.getElementById("deadline").value);
+		console.log("Setting deadline to " + deadline + " and current block num is " + currentBlockNumber);
+		console.log("Prices, starting/reserve " + startingPrice + "/" + reservePrice);
+		console.log("Marketer is: " + marketer);
 
-	auctionHouseContract.createAuction(recordId,
-			 "Auction for this unique name!",
-			 contractAddress,
-			 recordId,
-			 deadline,
-			 startingPrice,
-			 reservePrice,
-			 5,
-			 marketer,
-			 {from: account, gas:500000}).then(function(txId) {
-          web3.eth.getTransactionReceipt(txId, function(error, receipt) {
-            if (receipt["gasUsed"] == 500000) {
-              setStatus("Auction creation failed", "error");
-              hideSpinner();
-            } else {
-              setStatus("Auction created in transaction: " + txId);
-              hideSpinner();
-              updateAuctions();
-            }
-
-          });
-			 });
-    });
+		auctionHouseContract.createAuction(recordId,
+			"Auction for this unique name!",
+			contractAddress,
+			recordId,
+			deadline,
+			startingPrice,
+			reservePrice,
+			5,
+			marketer,
+			{from: account, gas:500000}).then(function(promise) {
+				var txId = promise['tx'];
+				var receipt = promise['receipt'];
+				// console.log("txID:" + txId);
+				// console.log(JSON.stringify(promise, null, 2));
+				// web3.eth.getTransactionReceipt(txId, function(error, receipt) {
+				if (receipt["gasUsed"] == 500000) {
+					setStatus("Auction creation failed", "error");
+					hideSpinner();
+				} else {
+					setStatus("Auction created in transaction: " + txId);
+					hideSpinner();
+					updateAuctions();
+				}
+				// });
+			});
+    	});
 };
 
 window.onload = function() {
     $("#right-column").load("rightPanel.html", function() {
-	updateInfoBox(infoBoxHTMLCreate);
+		updateInfoBox(infoBoxHTMLCreate);
 
         getContractAddress(function(ah_addr, sn_addr, error) {
 	    if (error != null) {
@@ -117,13 +121,13 @@ window.onload = function() {
 
 	    web3.eth.getAccounts(function(err, accs) {
 	        if (err != null) {
-		    alert("There was an error fetching your accounts.");
-		    return;
+				alert("There was an error fetching your accounts.");
+				return;
 	        }
 
 	        if (accs.length == 0) {
-		    alert("Couldn't get any accounts! Make sure your Ethereum client is configured correctly.");
-		    return;
+				alert("Couldn't get any accounts! Make sure your Ethereum client is configured correctly.");
+				return;
 	        }
 
  	        accounts = accs;
@@ -142,23 +146,23 @@ function watchEvents() {
     var events = auctionHouseContract.allEvents();
 
     events.watch(function(err, msg) {
-	if(err) {
-	    console.log("Error: " + err);
-	} else { 
-	    console.log("Got an event: " + msg.event);
-	}
+		if(err) {
+			console.log("Error: " + err);
+		} else { 
+			console.log("Got an event: " + msg.event);
+		}
     });
 
     var filter = web3.eth.filter("latest");
     filter.watch(function(err, block) {
-	// Call get block number on every block
-	updateBlockNumber();
+		// Call get block number on every block
+		updateBlockNumber();
     });
 }
 
 function updateBlockNumber() {
     web3.eth.getBlockNumber(function(err, blockNumber) {
-	currentBlockNumber = blockNumber;
-	console.log("Current block number is: " + blockNumber);
+		currentBlockNumber = blockNumber;
+		console.log("Current block number is: " + blockNumber);
     });
 }

@@ -25,15 +25,17 @@ getContractAddress = function(callback) {
             }
         } else {
             //For dev purposes - we use Fieldbook as a registry for our local contract address
-            var xmlHttp = new XMLHttpRequest();
-            xmlHttp.open( "GET", "https://api.fieldbook.com/v1/5802f2556147990300c7827b/sheet_1?network=" + result + "&key=auctionhouse", false );
-            xmlHttp.send( null );
-            ah_contract_addr = JSON.parse(xmlHttp.responseText)[0]["value"];
+            // var xmlHttp = new XMLHttpRequest();
+            // xmlHttp.open( "GET", "https://api.fieldbook.com/v1/5802f2556147990300c7827b/sheet_1?network=" + result + "&key=auctionhouse", false );
+            // xmlHttp.send( null );
+            // ah_contract_addr = JSON.parse(xmlHttp.responseText)[0]["value"];
+            ah_contract_addr = "0x25c9a7ee7009303bd0c5e631c2b1ac32ab10ab0d"
 
-            xmlHttp = new XMLHttpRequest();
-            xmlHttp.open( "GET", "https://api.fieldbook.com/v1/5802f2556147990300c7827b/sheet_1?network=" + result + "&key=samplename", false );
-            xmlHttp.send( null );
-            sn_contract_addr = JSON.parse(xmlHttp.responseText)[0]["value"];
+            // xmlHttp = new XMLHttpRequest();
+            // xmlHttp.open( "GET", "https://api.fieldbook.com/v1/5802f2556147990300c7827b/sheet_1?network=" + result + "&key=samplename", false );
+            // xmlHttp.send( null );
+            // sn_contract_addr = JSON.parse(xmlHttp.responseText)[0]["value"];
+            sn_contract_addr = "0xaf35783968f346515a91c8dc952b9d65f16da3b6"
         }
 
         console.log("network id: " + result);

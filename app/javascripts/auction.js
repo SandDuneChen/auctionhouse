@@ -18,30 +18,31 @@ function refreshAuction() {
     auction = {"auctionId": auctionId};
 
     auctionHouseContract.getAuctionCount.call().then(function(auctionCount) {
-	// console.log(auctionCount.toNumber());
-	if (auctionCount.toNumber() < auctionId) {
+        // console.log(auctionCount.toNumber());
+        if (auctionCount.toNumber() < auctionId) {
             setStatus("Cannot find auction: " + auctionId, "error");
             throw new Error();
             //Redirect to 404 page
-	}
+        }
     });
 
-    auctionHouseContract.getStatus.call(auctionId).then(function(auctionStatus) {
-	// console.log("status:" + auctionStatus);
-	if (auctionStatus == 0) {
+    auctionHouseContract.getStatus.call(auctionId).then(function(promise) {
+        // console.log("status:" + auctionStatus);
+        var auctionStatus = promise.toString();
+        if (auctionStatus === "0") {
             auction["status"] = "Pending";
-	    updateInfoBox(infoBoxHTMLOwnerPending);
-	} else if (auctionStatus == 1) {
+            updateInfoBox(infoBoxHTMLOwnerPending);
+        } else if (auctionStatus === "1") {
             auction["status"] = "Active";
-	    updateInfoBox(infoBoxHTMLActive);
-	} else if (auctionStatus == 2) {
+            updateInfoBox(infoBoxHTMLActive);
+        } else if (auctionStatus === "2") {
             auction["status"] = "Inactive";
-  	    updateInfoBox(infoBoxHTMLInactive);
-	} else {
+            updateInfoBox(infoBoxHTMLInactive);
+        } else {
             alert("Unknown status: " + auctionStatus);
-	}
+        }
 
-	auctionHouseContract.getAuction.call(auctionId).then(function(result) {
+        auctionHouseContract.getAuction.call(auctionId).then(function(result) {
             auction["seller"] = result[0];
             auction["contractAddress"] = result[1];
             auction["recordId"] = result[2];
@@ -57,14 +58,13 @@ function refreshAuction() {
 
             var container = document.getElementById("auction_container");
             container.innerHTML = constructAuctionView(auction);
-      });
-
+        });
     });
 }
 
 function activateAuction() {
     if (!isOwner()) {
-	setStatus("Only seller can activate auction.", "error");
+	    setStatus("Only seller can activate auction.", "error");
     }
 
     //Transfer ownership to the contract
@@ -78,19 +78,20 @@ function activateAuction() {
     var assetContract = Asset.at(auction["contractAddress"]);
 
     assetContract.owner.call(auction["recordId"]).then(function(ownerAddress) {
-	if (ownerAddress != auctionHouseContract.address) {
-	    // Asset not owned by contract. First set its owner to this contract
-	    assetContract.setOwner(auction["recordId"], auctionHouseContract.address, {from: account, gas: 500000}).then(function(txnId) {
-		console.log("set owner transaction: " + txnId);
-		setStatus("Ownership transfer complete!");
-		hideSpinner();
+        if (ownerAddress != auctionHouseContract.address) {
+            // Asset not owned by contract. First set its owner to this contract
+            assetContract.setOwner(auction["recordId"], auctionHouseContract.address, {from: account, gas: 500000}).then(function(promise) {
+                var txnId = promise['tx'];
+                console.log("set owner transaction: " + txnId);
+                setStatus("Ownership transfer complete!");
+                hideSpinner();
 
-		performActivation();
-	    });
-	} else {
-	    // Asset is already owned by the contract
-	    performActivation();
-	}
+                performActivation();
+            });
+        } else {
+            // Asset is already owned by the contract
+            performActivation();
+        }
     });
 }
 
@@ -98,11 +99,12 @@ function performActivation() {
     //Activate the auction
     setStatus("Activating auction...", "warning");
     showSpinner();
-    auctionHouseContract.activateAuction(auction["auctionId"], {from: account, gas: 500000}).then(function(txnId) {
-	console.log("activate auction txnId" + txnId);
-	setStatus("Auction activated!");
-	hideSpinner();
-	refreshAuction();
+    auctionHouseContract.activateAuction(auction["auctionId"], {from: account, gas: 500000}).then(function(promise) {
+        var txnId = promise['tx'];
+        console.log("activate auction txnId" + txnId);
+        setStatus("Auction activated!");
+        hideSpinner();
+        refreshAuction();
     });
 }
 
@@ -114,37 +116,40 @@ function placeBid() {
     showSpinner();
 
     if (bid < auction["currentBid"]) {
-	setStatus("Bid has to be at least " + auction["currentBid"], "error");
-	return;
+        setStatus("Bid has to be at least " + auction["currentBid"], "error");
+        return;
     }
 
     var gas = 1400000;
-    auctionHouseContract.placeBid(auction["auctionId"], {from:account, value:bid, gas: gas}).then(function(txnId) {
-	console.log("Bid txnId: " + txnId);
-	web3.eth.getTransactionReceipt(txnId, function(err, txnReceipt) {
+    auctionHouseContract.placeBid(auction["auctionId"], {from:account, value:bid, gas: gas}).then(function(promise) {
+        var txnId = promise['tx'];
+	    console.log("Bid txnId: " + txnId);
+        var txnReceipt = promise['receipt'];
+	    // web3.eth.getTransactionReceipt(txnId, function(err, txnReceipt) {
 	    if (txnReceipt.gasUsed == gas) {
-		console.log("We had a failed bid " + txnReceipt);
-		setStatus("Bid failed", "error");
-		hideSpinner();
+            console.log("We had a failed bid " + JSON.stringify(txnReceipt));
+            setStatus("Bid failed", "error");
+            hideSpinner();
 	    } else {
-		console.log("We had a successful bid " + txnReceipt);
-		setStatus("Bid succeeded!", "success");
-		hideSpinner();
+            console.log("We had a successful bid " + JSON.stringify(txnReceipt));
+            setStatus("Bid succeeded!", "success");
+            hideSpinner();
 	    }
-	});
-	refreshAuction();
+	    // });
+	    refreshAuction();
     });
 }
 
 function endAuction() {
     setStatus("Ending auction...", "warning");
-  showSpinner();
-  auctionHouseContract.endAuction(auction["auctionId"], {from:account, gas: 1400000}).then(function(txnId) {
-    console.log("End auction txnId: " + txnId)
-    setStatus("Auction ended successfully.");
-    hideSpinner();
-    refreshAuction();
-  });
+    showSpinner();
+    auctionHouseContract.endAuction(auction["auctionId"], {from:account, gas: 1400000}).then(function(promise) {
+        var txnId = promise['tx']
+        console.log("End auction txnId: " + txnId)
+        setStatus("Auction ended successfully.");
+        hideSpinner();
+        refreshAuction();
+    });
 }
 
 function isOwner() {
@@ -165,18 +170,18 @@ function constructAuctionView(auction) {
     
     //Activate auction button
     if (auction["status"] == "Pending" && isOwner()) {
-	result += "<tr><td class='auctionLabel'>Activate Auction:</td><td><button id='activation_button' onclick='activateAuction()'>Activate Auction</button></td></tr>";
+	    result += "<tr><td class='auctionLabel'>Activate Auction:</td><td><button id='activation_button' onclick='activateAuction()'>Activate Auction</button></td></tr>";
     } 
 
     //Place bid button
     if (auction["status"] == "Active" && currentBlockNumber <= auction["blockNumberOfDeadline"]) {
-	result += "<tr><td class='auctionLabel'>Bid (in eth):</td><td><input type='text' id='bid_value' placeholder='eg 3.0'></input></td></tr>";
-	result += "<tr><td class='auctionLabel'>&nbsp;</td><td><button id='bid_button' class='btn btn-primary' onclick='placeBid()'>Place Bid</button></td></tr>";
+        result += "<tr><td class='auctionLabel'>Bid (in eth):</td><td><input type='text' id='bid_value' placeholder='eg 3.0'></input></td></tr>";
+        result += "<tr><td class='auctionLabel'>&nbsp;</td><td><button id='bid_button' class='btn btn-primary' onclick='placeBid()'>Place Bid</button></td></tr>";
     }
 
     //End auction button
-    if (auction["status"] == "Active" && currentBlockNumber > auction["blockNumberOfDeadline"]) {
-	result += "<tr><td class='auctionLabel'>End Auction:</td><td><button id='end_button' onclick='endAuction()'>End Auction</button></td></tr>";
+    if (auction["status"] === "Active" && currentBlockNumber > auction["blockNumberOfDeadline"]) {
+	    result += "<tr><td class='auctionLabel'>End Auction:</td><td><button id='end_button' onclick='endAuction()'>End Auction</button></td></tr>";
     }
 
     result += "</table>";
@@ -189,7 +194,6 @@ window.onload = function() {
     $("#header").load("header.html");
     $("#right-column").load("rightPanel.html", function() {
 	updateInfoBox(infoBoxHTMLOwnerPending);
-
         getContractAddress(function(ah_addr, sn_addr, error) {
 	    if (error != null) {
 	        setStatus("Cannot find network. Please run an ethereum node or use Metamask.", "error");
@@ -199,28 +203,23 @@ window.onload = function() {
 
 	    auctionHouseContract = AuctionHouse.at(ah_addr);
 	    sampleNameContract = SampleName.at(sn_addr);
-
 	    web3.eth.getAccounts(function(err, accs) {
-
 	        accounts = accs;
 	        account = accounts[0];
-
 	        updateEthNetworkInfo();
 	        refreshAuction();
 	        updateBlockNumber();
-
 	        watchEvents();
 	    });
         });
     });
-
 }
 
 function getParameterByName(name, url) {
     if (!url) url = window.location.href;
     name = name.replace(/[\[\]]/g, "\\$&");
-    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
-        results = regex.exec(url);
+    var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)");
+    var results = regex.exec(url);
     if (!results) return null;
     if (!results[2]) return '';
     return decodeURIComponent(results[2].replace(/\+/g, " "));
@@ -231,35 +230,34 @@ function watchEvents() {
     var events = auctionHouseContract.allEvents();
 
     events.watch(function(err, msg) {
-      if(err) {
-          console.log("Error: " + err);
-      } else { 
-          console.log("Got an event: " + msg.event);
-      }
-        });
+        if(err) {
+            console.log("Error: " + err);
+        } else { 
+            console.log("Got an event: " + msg.event);
+        }
+    });
 
-        var filter = web3.eth.filter("latest");
-        filter.watch(function(err, block) {
-      // Call get block number on every block
-      updateBlockNumber();
+    var filter = web3.eth.filter("latest");
+    filter.watch(function(err, block) {
+        // Call get block number on every block
+        updateBlockNumber();
     });
 }
 
 function updateBlockNumber() {
     web3.eth.getBlockNumber(function(err, blockNumber) {
-	currentBlockNumber = blockNumber;
-	console.log("Block number is : " + blockNumber);
-	console.log("auction is: " + auction);
+        currentBlockNumber = blockNumber;
+        console.log("Block number is : " + blockNumber);
+        console.log("auction is: " + JSON.stringify(auction));
 
-	if (auction != null) {
-	    var blocksLeft = auction['blockNumberOfDeadline'] - currentBlockNumber;
-
-	    if (blocksLeft > 0) {
-		var minsLeft = blocksLeft * 12.5 / 60;  // About 12 second block times
-		$("span#deadlineCountdown").text("(" + blocksLeft + " blocks, and " + minsLeft + " minutes from now)");
-	    } else if (blocksLeft <= 0 && $("#bid_button").length == 1) {
-            refreshAuction();
+        if (auction != null) {
+            var blocksLeft = auction['blockNumberOfDeadline'] - currentBlockNumber;
+            if (blocksLeft > 0) {
+                var minsLeft = blocksLeft * 12.5 / 60;  // About 12 second block times
+                $("span#deadlineCountdown").text("(" + blocksLeft + " blocks, and " + minsLeft + " minutes from now)");
+            } else if (blocksLeft <= 0 && $("#bid_button").length == 1) {
+                refreshAuction();
+            }
         }
-	}
     });
 }

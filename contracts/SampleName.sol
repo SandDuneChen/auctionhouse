@@ -14,6 +14,8 @@ contract SampleName is Asset {
 
     mapping(string => Record) records;  // Map an ID to the record
 
+    mapping(address => string[]) public ownRecords;
+
     modifier onlyOwner(string _recordId) {
         if (records[_recordId].owner != msg.sender) throw;
         _;
@@ -39,6 +41,7 @@ contract SampleName is Asset {
         r.owner = _owner;
         r.name = _name;
         r.walletAddress = _walletAddress;
+
         return true;
     }
 

@@ -62,6 +62,7 @@ contract AuctionHouse {
 
     event LogFailure(string message);
 
+    // Modifier
     modifier onlyOwner {
         if (owner != msg.sender) throw;
         _;
@@ -78,18 +79,20 @@ contract AuctionHouse {
             throw;
         }
 
-        // Auction should not be over
+        // Auction should not be over deadline
         if (block.number >= a.blockNumberOfDeadline) {
             throw;
         }
         _;
     }
 
+    // Constructor
     function AuctionHouse() {
         owner = msg.sender;
     }
 
     // Create an auction, transfer the item to this contract, activate the auction
+    // TODO: where is the transfer of the item to this contract???
     function createAuction(
                            string _title,
                            string _description,
@@ -153,9 +156,133 @@ contract AuctionHouse {
         return auctionId;
     }
 
-    function partyOwnsAsset(address _party, address _contract, string _recordId) returns (bool success) {
-        Asset assetContract = Asset(_contract);
-        return assetContract.owner(_recordId) == _party;
+    function activateAuction(uint auctionId) onlySeller(auctionId) returns (bool){
+        Auction a = auctions[auctionId];
+
+        if (!partyOwnsAsset(this, a.contractAddress, a.recordId)) throw;
+
+        a.status = AuctionStatus.Active;
+        AuctionActivated(auctionId);
+        return true;
+    }
+
+    function cancelAuction(uint auctionId) onlySeller(auctionId) returns (bool) {
+        Auction a = auctions[auctionId];
+
+        if (!partyOwnsAsset(this, a.contractAddress, a.recordId)) throw;
+        // Can't cancel the auction if someone has already outbid the reserve.
+        if (a.currentBid >= a.reservePrice) throw;   
+
+        Asset asset = Asset(a.contractAddress);
+        if(!asset.setOwner(a.recordId, a.seller)) {
+            throw;
+        }
+
+        // Refund to the bidder
+        uint bidsLength = a.bids.length;
+        if (bidsLength > 0) {
+            Bid topBid = a.bids[bidsLength - 1];
+            refunds[topBid.bidder] += topBid.amount;
+
+            activeContractRecordConcat[strConcat(addrToString(a.contractAddress), a.recordId)] = false;
+        }
+
+        AuctionCancelled(auctionId);
+        a.status = AuctionStatus.Inactive;
+        return true;
+    }
+
+    /* BIDS */
+    function placeBid(uint auctionId) payable onlyLive(auctionId) returns (bool success) {
+        uint256 amount = msg.value;
+        Auction a = auctions[auctionId];
+
+        // new bid must larger then current bid
+        if (a.currentBid >= amount) throw;
+
+        uint bidIdx = a.bids.length++;
+        Bid b = a.bids[bidIdx];
+        b.bidder = msg.sender;
+        b.amount = amount;
+        b.timestamp = now;
+        a.currentBid = amount;
+
+        auctionsBidOnByUser[b.bidder].push(auctionId);
+
+        // Log refunds for the previous bidder
+        // we got new bid, and need to refund previous bid
+        if (bidIdx > 0) {
+            Bid previousBid = a.bids[bidIdx - 1];
+            refunds[previousBid.bidder] += previousBid.amount;
+        }
+
+        BidPlaced(auctionId, b.bidder, b.amount);
+        return true;
+    }
+
+    function endAuction(uint auctionId) returns (bool success) {
+        // Check if the auction is passed the end date
+        Auction a = auctions[auctionId];
+        activeContractRecordConcat[strConcat(addrToString(a.contractAddress), a.recordId)] = false;
+
+        // Make sure auction hasn't already been ended
+        if (a.status != AuctionStatus.Active) {
+            LogFailure("Can not end an auction that's already ended");
+            throw;
+        }
+        
+        // Make sure the auction at the deadline
+        if (block.number < a.blockNumberOfDeadline) {
+            LogFailure("Can not end an auction that hasn't hit the deadline yet");
+            throw; 
+        }
+
+        Asset asset = Asset(a.contractAddress);
+
+        // No bids, make the auction inactive
+        if (a.bids.length == 0) {
+            if(!asset.setOwner(a.recordId, a.seller)) {
+                throw;
+            }
+            a.status = AuctionStatus.Inactive;
+            return true;
+        }
+
+        Bid topBid = a.bids[a.bids.length - 1];
+
+        // If the auction hit its reserve price
+        if (a.currentBid >= a.reservePrice) {
+            uint distributionShare = a.currentBid * a.distributionCut / 100;  // Calculate the distribution cut
+            uint sellerShare = a.currentBid - distributionShare;
+
+            if(!asset.setOwner(a.recordId, topBid.bidder)) {
+                throw;
+            } // Set the items new owner
+
+            refunds[a.distributionAddress] += distributionShare;
+            refunds[a.seller] += sellerShare;
+
+            AuctionEndedWithWinner(auctionId, topBid.bidder, a.currentBid);
+        } else {
+            // Return the item to the owner and the money to the top bidder
+            if(!asset.setOwner(a.recordId, a.seller)) {
+                throw;
+            }
+
+            refunds[topBid.bidder] += a.currentBid;
+
+            AuctionEndedWithoutWinner(auctionId, a.currentBid, a.reservePrice);
+        }
+
+        a.status = AuctionStatus.Inactive;
+        return true;
+    }
+
+    function withdrawRefund() {
+        uint refund = refunds[msg.sender];
+        refunds[msg.sender] = 0;
+        if (!msg.sender.send(refund))
+            refunds[msg.sender] = refund;
     }
 
     /**
@@ -216,43 +343,6 @@ contract AuctionHouse {
         return activeContractRecordConcat[_contractRecordConcat];
     }
 
-    // Checks if this contract address is the owner of the item for the auction
-    function activateAuction(uint auctionId) onlySeller(auctionId) returns (bool){
-        Auction a = auctions[auctionId];
-
-        if (!partyOwnsAsset(this, a.contractAddress, a.recordId)) throw;
-
-        a.status = AuctionStatus.Active;
-        AuctionActivated(auctionId);
-        return true;
-    }
-
-    function cancelAuction(uint auctionId) onlySeller(auctionId) returns (bool) {
-        Auction a = auctions[auctionId];
-
-        if (!partyOwnsAsset(this, a.contractAddress, a.recordId)) throw;
-        if (a.currentBid >= a.reservePrice) throw;   // Can't cancel the auction if someone has already outbid the reserve.
-
-        Asset asset = Asset(a.contractAddress);
-        if(!asset.setOwner(a.recordId, a.seller)) {
-            throw;
-        }
-
-        // Refund to the bidder
-        uint bidsLength = a.bids.length;
-        if (bidsLength > 0) {
-            Bid topBid = a.bids[bidsLength - 1];
-            refunds[topBid.bidder] += topBid.amount;
-
-            activeContractRecordConcat[strConcat(addrToString(a.contractAddress), a.recordId)] = false;
-        }
-
-        AuctionCancelled(auctionId);
-        a.status = AuctionStatus.Inactive;
-        return true;
-    }
-
-    /* BIDS */
     function getBidCountForAuction(uint auctionId) returns (uint) {
         Auction a = auctions[auctionId];
         return a.bids.length;
@@ -268,97 +358,8 @@ contract AuctionHouse {
         return (b.bidder, b.amount, b.timestamp);
     }
 
-    function placeBid(uint auctionId) payable onlyLive(auctionId) returns (bool success) {
-        uint256 amount = msg.value;
-        Auction a = auctions[auctionId];
-
-        if (a.currentBid >= amount) throw;
-
-        uint bidIdx = a.bids.length++;
-        Bid b = a.bids[bidIdx];
-        b.bidder = msg.sender;
-        b.amount = amount;
-        b.timestamp = now;
-        a.currentBid = amount;
-
-        auctionsBidOnByUser[b.bidder].push(auctionId);
-
-        // Log refunds for the previous bidder
-        if (bidIdx > 0) {
-            Bid previousBid = a.bids[bidIdx - 1];
-            refunds[previousBid.bidder] += previousBid.amount;
-        }
-
-        BidPlaced(auctionId, b.bidder, b.amount);
-        return true;
-    }
-
     function getRefundValue() returns (uint) {
         return refunds[msg.sender];
-    }
-
-    function withdrawRefund() {
-        uint refund = refunds[msg.sender];
-        refunds[msg.sender] = 0;
-        if (!msg.sender.send(refund))
-            refunds[msg.sender] = refund;
-    }
-
-    function endAuction(uint auctionId) returns (bool success) {
-        // Check if the auction is passed the end date
-        Auction a = auctions[auctionId];
-        activeContractRecordConcat[strConcat(addrToString(a.contractAddress), a.recordId)] = false;
-
-        // Make sure auction hasn't already been ended
-        if (a.status != AuctionStatus.Active) {
-            LogFailure("Can not end an auction that's already ended");
-            throw;
-        }
-        
-        if (block.number < a.blockNumberOfDeadline) {
-            LogFailure("Can not end an auction that hasn't hit the deadline yet");
-            throw; 
-        }
-
-        Asset asset = Asset(a.contractAddress);
-
-        // No bids, make the auction inactive
-        if (a.bids.length == 0) {
-            if(!asset.setOwner(a.recordId, a.seller)) {
-                throw;
-            }
-            a.status = AuctionStatus.Inactive;
-            return true;
-        }
-
-        Bid topBid = a.bids[a.bids.length - 1];
-
-        // If the auction hit its reserve price
-        if (a.currentBid >= a.reservePrice) {
-            uint distributionShare = a.currentBid * a.distributionCut / 100;  // Calculate the distribution cut
-            uint sellerShare = a.currentBid - distributionShare;
-
-            if(!asset.setOwner(a.recordId, topBid.bidder)) {
-                throw;
-            } // Set the items new owner
-
-            refunds[a.distributionAddress] += distributionShare;
-            refunds[a.seller] += sellerShare;
-
-            AuctionEndedWithWinner(auctionId, topBid.bidder, a.currentBid);
-        } else {
-            // Return the item to the owner and the money to the top bidder
-            if(!asset.setOwner(a.recordId, a.seller)) {
-                throw;
-            }
-
-            refunds[topBid.bidder] += a.currentBid;
-
-            AuctionEndedWithoutWinner(auctionId, a.currentBid, a.reservePrice);
-        }
-
-        a.status = AuctionStatus.Inactive;
-        return true;
     }
 
     function() {
@@ -366,6 +367,13 @@ contract AuctionHouse {
         throw;
     }
 
+    // Checks if this contract address is the owner of the item for the auction
+    function partyOwnsAsset(address _party, address _contract, string _recordId) returns (bool success) {
+        Asset assetContract = Asset(_contract);
+        return assetContract.owner(_recordId) == _party;
+    }
+
+    // concatenat two strings
     function strConcat(string _a, string _b) internal returns (string) {
         bytes memory _ba = bytes(_a);
         bytes memory _bb = bytes(_b);
@@ -376,6 +384,7 @@ contract AuctionHouse {
         return string(ab);
     }
 
+    // convert address to string
     function addrToString(address x) returns (string) {
         bytes memory b = new bytes(20);
         for (uint i = 0; i < 20; i++)
